@@ -12,6 +12,7 @@ __metadata:
     "@jymfony/autoloader": 0.1.0-alpha.31
     "@jymfony/compiler": ^0.4.2
     "@jymfony/debug": 0.1.0-alpha.31
+    "@jymfony/filesystem": 0.1.0-alpha.31
     "@jymfony/testing": 0.1.0-alpha.31
     "@napi-rs/cli": ^2.15.2
     mocha: ^10.2.0
@@ -104,6 +105,18 @@ __metadata:
   version: 0.1.0-alpha.31
   resolution: "@jymfony/exceptions@npm:0.1.0-alpha.31"
   checksum: 56d66b35dddefbecb1a64d70dee52f690c46fb23da7f34daf680de37056913452266c82150062ee532a64021b9a314640c1c0e258a2e02945c432c66585fff3c
+  languageName: node
+  linkType: hard
+
+"@jymfony/filesystem@npm:0.1.0-alpha.31":
+  version: 0.1.0-alpha.31
+  resolution: "@jymfony/filesystem@npm:0.1.0-alpha.31"
+  dependencies:
+    "@jymfony/autoloader": 0.1.0-alpha.31
+    "@jymfony/datetime": 0.1.0-alpha.31
+    "@jymfony/exceptions": 0.1.0-alpha.31
+    "@jymfony/util": 0.1.0-alpha.31
+  checksum: b6f815c0b8cb0733fc18b4bb4412f387a350bcc20f7a90af22c63ef93b4cfffca00971a3036a4beb050117369f9f33d2fbc3758a7ade2c5747d0dbb226868853
   languageName: node
   linkType: hard
 

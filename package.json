@@ -25,6 +25,7 @@
     "@jymfony/autoloader": "0.1.0-alpha.31",
     "@jymfony/compiler": "^0.4.2",
     "@jymfony/debug": "0.1.0-alpha.31",
+    "@jymfony/filesystem": "0.1.0-alpha.31",
     "@jymfony/testing": "0.1.0-alpha.31",
     "@napi-rs/cli": "^2.15.2",
     "mocha": "^10.2.0"
