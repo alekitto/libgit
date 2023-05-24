@@ -1,3 +1,4 @@
+use crate::commit::Commit;
 use crate::credentials::Credentials;
 use crate::reference::ReferenceType;
 use crate::{Oid, RepositoryState};
@@ -18,7 +19,7 @@ pub struct FetchOptions {
 
 #[napi]
 pub struct Repository {
-  repository: git2::Repository,
+  pub(crate) repository: git2::Repository,
 }
 
 #[napi]
@@ -103,6 +104,47 @@ impl Repository {
   }
 
   #[napi]
+  pub fn find_commit(
+    &self,
+    target: ClassInstance<Oid>,
+    reference: Reference<Repository>,
+    env: Env,
+  ) -> Result<Commit> {
+    Commit::find(reference, target.clone(), env)
+  }
+
+  #[napi]
+  pub fn create_branch(
+    &self,
+    name: String,
+    commit: Either3<ClassInstance<Commit>, ClassInstance<Oid>, String>,
+    force: bool,
+    this_ref: Reference<Repository>,
+    env: Env,
+  ) -> Result<crate::reference::Reference> {
+    let commit = match commit {
+      Either3::A(commit) => Commit::find(this_ref.clone(env)?, commit.oid(), env)?,
+      Either3::B(oid) => Commit::find(this_ref.clone(env)?, oid.as_ref().clone(), env)?,
+      Either3::C(commit_sha) => {
+        let oid = git2::Oid::from_str(&commit_sha)?;
+        Commit::find(this_ref.clone(env)?, Oid(oid), env)?
+      }
+    };
+
+    let inner = this_ref.share_with(env, |repository| {
+      Ok(
+        repository
+          .repository
+          .branch(&name, &commit.inner, force)
+          .map_err(anyhow::Error::from)?
+          .into_reference(),
+      )
+    })?;
+
+    Ok(crate::reference::Reference { inner })
+  }
+
+  #[napi]
   pub fn fetch(&self, options: Option<FetchOptions>, env: Env) -> Result<()> {
     let options = options.unwrap_or_default();
     let remote_name = options.remote.unwrap_or_else(|| "origin".to_string());
@@ -153,21 +195,44 @@ impl Repository {
   }
 
   #[napi]
-  pub fn get_reference(&self, reference: String) -> Result<crate::reference::Reference> {
-    Ok(
-      self
-        .repository
-        .find_reference(&reference)
-        .map(|r| crate::reference::Reference {
-          kind: if r.kind() == Some(git2::ReferenceType::Direct) {
-            ReferenceType::Direct
-          } else {
-            ReferenceType::Symbolic
-          },
-          target: r.target().map(Oid),
-          name: r.name().map(ToString::to_string),
-        })?,
-    )
+  pub fn get_current_branch(
+    &self,
+    this_ref: Reference<Repository>,
+    env: Env,
+  ) -> Result<crate::reference::Reference> {
+    self.head(this_ref, env)
+  }
+
+  #[napi]
+  pub fn head(
+    &self,
+    this_ref: Reference<Repository>,
+    env: Env,
+  ) -> Result<crate::reference::Reference> {
+    let inner = this_ref.share_with(env, |repository| {
+      Ok(repository.repository.head().map_err(anyhow::Error::from)?)
+    })?;
+
+    Ok(crate::reference::Reference { inner })
+  }
+
+  #[napi]
+  pub fn get_reference(
+    &self,
+    reference: String,
+    this_ref: Reference<Repository>,
+    env: Env,
+  ) -> Result<crate::reference::Reference> {
+    let inner = this_ref.share_with(env, |repository| {
+      Ok(
+        repository
+          .repository
+          .find_reference(&reference)
+          .map_err(anyhow::Error::from)?,
+      )
+    })?;
+
+    Ok(crate::reference::Reference { inner })
   }
 
   #[napi]

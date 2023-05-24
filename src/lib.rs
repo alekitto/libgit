@@ -1,3 +1,4 @@
+mod commit;
 mod credentials;
 mod reference;
 mod repository;
