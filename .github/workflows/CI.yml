@@ -37,12 +37,10 @@ jobs:
             target: i686-pc-windows-msvc
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
+            docker: alekitto/napi-rs:18.04-node-16
             build: |-
               set -e &&
-              sudo apt-get update &&
-              sudo apt-get install libssl-dev -y
-              OPENSSL_NO_VENDOR=1 RUSTFLAGS="-L /usr/lib/x86_64-linux-gnu" yarn build --target x86_64-unknown-linux-gnu &&
+              yarn build --target x86_64-unknown-linux-gnu &&
               strip *.node
           - host: ubuntu-latest
             target: x86_64-unknown-linux-musl
