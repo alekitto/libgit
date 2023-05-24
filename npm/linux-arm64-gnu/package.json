@@ -1,0 +1,21 @@
+{
+  "name": "@alekitto/libgit-linux-arm64-gnu",
+  "version": "0.0.0",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "main": "libgit.linux-arm64-gnu.node",
+  "files": [
+    "libgit.linux-arm64-gnu.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 14"
+  },
+  "libc": [
+    "glibc"
+  ]
+}

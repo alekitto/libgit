@@ -1,0 +1,21 @@
+{
+  "name": "@alekitto/libgit-linux-arm64-musl",
+  "version": "0.0.0",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "main": "libgit.linux-arm64-musl.node",
+  "files": [
+    "libgit.linux-arm64-musl.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 14"
+  },
+  "libc": [
+    "musl"
+  ]
+}

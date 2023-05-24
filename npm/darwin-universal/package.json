@@ -1,0 +1,15 @@
+{
+  "name": "@alekitto/libgit-darwin-universal",
+  "version": "0.0.0",
+  "os": [
+    "darwin"
+  ],
+  "main": "libgit.darwin-universal.node",
+  "files": [
+    "libgit.darwin-universal.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 14"
+  }
+}

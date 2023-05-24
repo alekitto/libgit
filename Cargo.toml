@@ -1,0 +1,23 @@
+[package]
+edition = "2021"
+name = "alekitto_libgit"
+version = "0.0.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0"
+git2 = { version = "0.17", features = ["default", "https", "ssh", "ssh_key_from_memory", "vendored-libgit2", "vendored-openssl"] }
+napi = { version = "2.12", default-features = false, features = ["anyhow", "async", "error_anyhow", "napi7", "tokio_rt"] }
+napi-derive = "2.12"
+
+[dev-dependencies]
+libc = "0.2"
+tempfile = "3.5"
+
+[build-dependencies]
+napi-build = "2.0"
+
+[profile.release]
+lto = true
