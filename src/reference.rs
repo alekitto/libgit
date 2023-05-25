@@ -1,5 +1,5 @@
 use crate::repository::Repository;
-use crate::Oid;
+use crate::object::Oid;
 use napi::bindgen_prelude::*;
 
 #[napi]

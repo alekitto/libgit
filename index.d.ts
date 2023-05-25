@@ -27,8 +27,15 @@ export const enum RepositoryState {
   ApplyMailbox = 10,
   ApplyMailboxOrRebase = 11
 }
-export function sum(a: number, b: number): number
-export class Commit { }
+export const enum ResetType {
+  Soft = 0,
+  Hard = 1,
+  Mixed = 2
+}
+export class Commit {
+  asObject(): object
+  oid(): Oid
+}
 export class Credentials {
   static default(): Credentials
   static usernameAndPassword(username: string, password: string): Credentials
@@ -48,7 +55,9 @@ export class Repository {
   fetch(options?: FetchOptions | undefined | null): void
   getCurrentBranch(): Reference
   head(): Reference
+  reset(target: Commit | Reference | Oid, resetType?: ResetType | undefined | null): void
   getReference(reference: string): Reference
   getReferenceNames(referenceType?: ReferenceType | undefined | null): Array<string>
 }
 export class Oid { }
+export class Object { }

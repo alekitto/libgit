@@ -1,7 +1,8 @@
 use crate::commit::Commit;
 use crate::credentials::Credentials;
 use crate::reference::ReferenceType;
-use crate::{Oid, RepositoryState};
+use crate::object::Oid;
+use crate::{RepositoryState, ResetType};
 use anyhow::Result;
 use napi::bindgen_prelude::*;
 use napi::{Env, JsFunction, JsUnknown};
@@ -214,6 +215,36 @@ impl Repository {
     })?;
 
     Ok(crate::reference::Reference { inner })
+  }
+
+  #[napi]
+  pub fn reset(&self, target: Either3<ClassInstance<Commit>, ClassInstance<crate::reference::Reference>, ClassInstance<Oid>>, reset_type: Option<ResetType>, env: Env, this_ref: Reference<Repository>) -> Result<()> {
+    let object = match target {
+      Either3::A(commit) => (*commit).as_object(env),
+      Either3::B(reference) => {
+        let oid = reference.target().ok_or_else(|| anyhow::Error::msg("Cannot find reference target"))?;
+        Ok(crate::object::Object::from(Self::shared_object_from_oid(oid.0, env, this_ref)?))
+      },
+      Either3::C(oid) => {
+        Ok(crate::object::Object::from(Self::shared_object_from_oid(oid.0, env, this_ref)?))
+      }
+    }?;
+
+    self.repository.reset(object.inner(), reset_type.unwrap_or(ResetType::Mixed).into(), None)?;
+
+    Ok(())
+  }
+
+  fn shared_object_from_oid(oid: git2::Oid, env: Env, this_ref: Reference<Repository>) -> Result<SharedReference<Repository, git2::Object<'static>>> {
+    Ok(
+      this_ref.share_with(env, |repo| {
+        let object = repo.repository.find_object(oid, None).map_err(anyhow::Error::from)?;
+        match object.kind() {
+          Some(git2::ObjectType::Commit) | Some(git2::ObjectType::Tag) => Ok(object),
+          _ => Err(anyhow::Error::msg("Invalid object type").into())
+        }
+      })?
+    )
   }
 
   #[napi]

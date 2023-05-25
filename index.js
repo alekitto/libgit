@@ -252,7 +252,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { Commit, Credentials, ReferenceType, Reference, Repository, Oid, RepositoryState, sum } = nativeBinding
+const { Commit, Credentials, ReferenceType, Reference, Repository, Oid, Object, RepositoryState, ResetType } = nativeBinding
 
 module.exports.Commit = Commit
 module.exports.Credentials = Credentials
@@ -260,5 +260,6 @@ module.exports.ReferenceType = ReferenceType
 module.exports.Reference = Reference
 module.exports.Repository = Repository
 module.exports.Oid = Oid
+module.exports.Object = Object
 module.exports.RepositoryState = RepositoryState
-module.exports.sum = sum
+module.exports.ResetType = ResetType
