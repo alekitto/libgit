@@ -282,6 +282,15 @@ mod tests {
   }
 
   #[test]
+  fn smoke_js_init() {
+    let td = TempDir::new().unwrap();
+    let path = td.path();
+
+    let repo = Repository::js_init(path.to_string_lossy().to_string(), None).unwrap();
+    assert!(!repo.is_bare());
+  }
+
+  #[test]
   fn smoke_init_bare() {
     let td = TempDir::new().unwrap();
     let path = td.path();
