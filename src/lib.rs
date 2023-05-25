@@ -1,10 +1,10 @@
 mod commit;
 mod credentials;
+mod object;
 mod reference;
 mod repository;
 #[cfg(test)]
 mod test;
-mod object;
 
 use napi::bindgen_prelude::*;
 

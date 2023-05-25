@@ -39,12 +39,13 @@ export class Commit {
 export class Credentials {
   static default(): Credentials
   static usernameAndPassword(username: string, password: string): Credentials
+  static sshKeyFromMemory(username: string, publicKey: string | undefined | null, privateKey: string, passphrase?: string | undefined | null): Credentials
 }
 export class Reference { }
 export class Repository {
   static init(path: string, bare?: boolean | undefined | null): Repository
   static open(path: string): Repository
-  static clone(url: string, path: string, recursive?: boolean | undefined | null): Repository
+  static clone(url: string, path: string, recursive?: boolean | undefined | null, fetchOptions?: FetchOptions | undefined | null): Repository
   namespace(): string | null
   isBare(): boolean
   isEmpty(): boolean

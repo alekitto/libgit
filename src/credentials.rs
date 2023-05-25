@@ -24,6 +24,7 @@ impl Credentials {
     Self(CredentialType::UsernamePassword(username, password))
   }
 
+  #[napi(factory)]
   pub fn ssh_key_from_memory(
     username: String,
     public_key: Option<String>,

@@ -1,5 +1,5 @@
-use crate::repository::Repository;
 use crate::object::Oid;
+use crate::repository::Repository;
 use anyhow::Result;
 use napi::bindgen_prelude::*;
 
@@ -26,9 +26,10 @@ impl Commit {
 
   #[napi]
   pub fn as_object(&self, env: Env) -> Result<crate::object::Object> {
-    let obj = self.repository.clone(env)?.share_with(env, |_| {
-      Ok(self.inner.as_object().clone())
-    })?;
+    let obj = self
+      .repository
+      .clone(env)?
+      .share_with(env, |_| Ok(self.inner.as_object().clone()))?;
 
     Ok(crate::object::Object::from(obj))
   }

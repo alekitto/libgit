@@ -1,9 +1,10 @@
 use crate::commit::Commit;
 use crate::credentials::Credentials;
-use crate::reference::ReferenceType;
 use crate::object::Oid;
+use crate::reference::ReferenceType;
 use crate::{RepositoryState, ResetType};
 use anyhow::Result;
+use git2::build::RepoBuilder;
 use napi::bindgen_prelude::*;
 use napi::{Env, JsFunction, JsUnknown};
 use std::path::Path;
@@ -16,6 +17,42 @@ pub struct FetchOptions {
   #[napi(ts_type = "(url: string, username?: string) => Credentials")]
   pub credentials_callback: Option<JsFunction>,
   pub skip_certificate_check: Option<bool>,
+}
+
+impl FetchOptions {
+  pub fn to_git_fetch_opts(&self, env: Env) -> git2::FetchOptions {
+    let mut cb = git2::RemoteCallbacks::default();
+    if let Some(cred_cb) = &self.credentials_callback {
+      cb.credentials(move |url, username, _| {
+        (|| -> Result<ClassInstance<Credentials>, anyhow::Error> {
+          let credentials = cred_cb.call::<JsUnknown>(
+            None,
+            &[
+              env.create_string(url)?.into_unknown(),
+              if let Some(username) = username {
+                env.create_string(username)?.into_unknown()
+              } else {
+                env.get_undefined()?.into_unknown()
+              },
+            ],
+          )?;
+
+          Ok(ClassInstance::from_unknown(credentials)?)
+        })()
+        .and_then(|c| c.to_cred())
+        .map_err(|err| git2::Error::from_str(&err.to_string()))
+      });
+    }
+
+    if self.skip_certificate_check.unwrap_or(false) {
+      cb.certificate_check(|_cert, _domain| Ok(git2::CertificateCheckStatus::CertificateOk));
+    }
+
+    let mut fo = git2::FetchOptions::default();
+    fo.remote_callbacks(cb);
+
+    fo
+  }
 }
 
 #[napi]
@@ -36,8 +73,20 @@ impl Repository {
   }
 
   #[napi(factory, js_name = "clone")]
-  pub fn js_clone(url: String, path: String, recursive: Option<bool>) -> Result<Self> {
-    Self::clone(&url, path, recursive.unwrap_or(false))
+  pub fn js_clone(
+    url: String,
+    path: String,
+    recursive: Option<bool>,
+    fetch_options: Option<FetchOptions>,
+    env: Env,
+  ) -> Result<Self> {
+    Self::clone(
+      &url,
+      path,
+      recursive.unwrap_or(false),
+      fetch_options.unwrap_or_default(),
+      env,
+    )
   }
 
   pub fn init<P: AsRef<Path>>(path: P, bare: bool) -> Result<Self> {
@@ -56,12 +105,23 @@ impl Repository {
     Ok(Self { repository })
   }
 
-  pub fn clone<P: AsRef<Path>>(url: &str, directory: P, recursive: bool) -> Result<Self> {
-    let repository = if recursive {
-      git2::Repository::clone_recurse(url, directory)
-    } else {
-      git2::Repository::clone(url, directory)
-    }?;
+  pub fn clone<P: AsRef<Path>>(
+    url: &str,
+    directory: P,
+    recursive: bool,
+    fetch_options: FetchOptions,
+    env: Env,
+  ) -> Result<Self> {
+    let fo = fetch_options.to_git_fetch_opts(env);
+    let repository = RepoBuilder::new()
+      .fetch_options(fo)
+      .clone(url, directory.as_ref())?;
+
+    if recursive {
+      for mut submodule in repository.submodules()? {
+        submodule.update(true, None)?;
+      }
+    }
 
     Ok(Self { repository })
   }
@@ -148,42 +208,16 @@ impl Repository {
   #[napi]
   pub fn fetch(&self, options: Option<FetchOptions>, env: Env) -> Result<()> {
     let options = options.unwrap_or_default();
-    let remote_name = options.remote.unwrap_or_else(|| "origin".to_string());
+    let remote_name = options
+      .remote
+      .clone()
+      .unwrap_or_else(|| "origin".to_string());
 
-    let mut cb = git2::RemoteCallbacks::default();
-    if let Some(cred_cb) = &options.credentials_callback {
-      cb.credentials(move |url, username, _| {
-        (|| -> Result<ClassInstance<Credentials>, anyhow::Error> {
-          let credentials = cred_cb.call::<JsUnknown>(
-            None,
-            &[
-              env.create_string(url)?.into_unknown(),
-              if let Some(username) = username {
-                env.create_string(username)?.into_unknown()
-              } else {
-                env.get_undefined()?.into_unknown()
-              },
-            ],
-          )?;
-
-          Ok(ClassInstance::from_unknown(credentials)?)
-        })()
-        .and_then(|c| c.to_cred())
-        .map_err(|err| git2::Error::from_str(&err.to_string()))
-      });
-    }
-
-    if options.skip_certificate_check.unwrap_or(false) {
-      cb.certificate_check(|_cert, _domain| Ok(git2::CertificateCheckStatus::CertificateOk));
-    }
-
+    let mut fo = options.to_git_fetch_opts(env);
     let mut remote = self
       .repository
       .find_remote(&remote_name)
       .or_else(|_| self.repository.remote_anonymous(&remote_name))?;
-
-    let mut fo = git2::FetchOptions::default();
-    fo.remote_callbacks(cb);
     remote.download(&[] as &[&str], Some(&mut fo))?;
     remote.disconnect()?;
 
@@ -218,33 +252,56 @@ impl Repository {
   }
 
   #[napi]
-  pub fn reset(&self, target: Either3<ClassInstance<Commit>, ClassInstance<crate::reference::Reference>, ClassInstance<Oid>>, reset_type: Option<ResetType>, env: Env, this_ref: Reference<Repository>) -> Result<()> {
+  pub fn reset(
+    &self,
+    target: Either3<
+      ClassInstance<Commit>,
+      ClassInstance<crate::reference::Reference>,
+      ClassInstance<Oid>,
+    >,
+    reset_type: Option<ResetType>,
+    env: Env,
+    this_ref: Reference<Repository>,
+  ) -> Result<()> {
     let object = match target {
       Either3::A(commit) => (*commit).as_object(env),
       Either3::B(reference) => {
-        let oid = reference.target().ok_or_else(|| anyhow::Error::msg("Cannot find reference target"))?;
-        Ok(crate::object::Object::from(Self::shared_object_from_oid(oid.0, env, this_ref)?))
-      },
-      Either3::C(oid) => {
-        Ok(crate::object::Object::from(Self::shared_object_from_oid(oid.0, env, this_ref)?))
+        let oid = reference
+          .target()
+          .ok_or_else(|| anyhow::Error::msg("Cannot find reference target"))?;
+        Ok(crate::object::Object::from(Self::shared_object_from_oid(
+          oid.0, env, this_ref,
+        )?))
       }
+      Either3::C(oid) => Ok(crate::object::Object::from(Self::shared_object_from_oid(
+        oid.0, env, this_ref,
+      )?)),
     }?;
 
-    self.repository.reset(object.inner(), reset_type.unwrap_or(ResetType::Mixed).into(), None)?;
+    self.repository.reset(
+      object.inner(),
+      reset_type.unwrap_or(ResetType::Mixed).into(),
+      None,
+    )?;
 
     Ok(())
   }
 
-  fn shared_object_from_oid(oid: git2::Oid, env: Env, this_ref: Reference<Repository>) -> Result<SharedReference<Repository, git2::Object<'static>>> {
-    Ok(
-      this_ref.share_with(env, |repo| {
-        let object = repo.repository.find_object(oid, None).map_err(anyhow::Error::from)?;
-        match object.kind() {
-          Some(git2::ObjectType::Commit) | Some(git2::ObjectType::Tag) => Ok(object),
-          _ => Err(anyhow::Error::msg("Invalid object type").into())
-        }
-      })?
-    )
+  fn shared_object_from_oid(
+    oid: git2::Oid,
+    env: Env,
+    this_ref: Reference<Repository>,
+  ) -> Result<SharedReference<Repository, git2::Object<'static>>> {
+    Ok(this_ref.share_with(env, |repo| {
+      let object = repo
+        .repository
+        .find_object(oid, None)
+        .map_err(anyhow::Error::from)?;
+      match object.kind() {
+        Some(git2::ObjectType::Commit) | Some(git2::ObjectType::Tag) => Ok(object),
+        _ => Err(anyhow::Error::msg("Invalid object type").into()),
+      }
+    })?)
   }
 
   #[napi]
