@@ -1,3 +1,4 @@
+.dockerignore
 target
 Cargo.lock
 .cargo
@@ -11,3 +12,7 @@ yarn.lock
 .yarn
 test
 renovate.json
+src/
+Cargo.toml
+build.rs
+tests.js
