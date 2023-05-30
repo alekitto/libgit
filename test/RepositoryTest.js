@@ -19,34 +19,34 @@ export default class RepositoryTest extends TestCase {
         await fs.remove(this._tmpDirName);
     }
 
-    testRepositoryInit() {
-        const repo = Repository.init(this._tmpDirName);
+    async testRepositoryInit() {
+        const repo = await Repository.init(this._tmpDirName);
         __self.assertFalse(repo.isBare());
         __self.assertTrue(repo.isEmpty());
     }
 
-    testRepositoryInitBare() {
-        const repo = Repository.init(this._tmpDirName, true);
+    async testRepositoryInitBare() {
+        const repo = await Repository.init(this._tmpDirName, true);
         __self.assertTrue(repo.isBare());
         __self.assertTrue(repo.isEmpty());
         __self.assertNull(repo.namespace());
     }
 
-    testRepositoryOpen() {
-        Repository.init(this._tmpDirName);
+    async testRepositoryOpen() {
+        await Repository.init(this._tmpDirName);
 
-        const repo = Repository.open(this._tmpDirName);
+        const repo = await Repository.open(this._tmpDirName);
         __self.assertFalse(repo.isBare());
         __self.assertTrue(repo.isEmpty());
-        __self.assertEquals(RepositoryState.Clean, repo.state());
+        __self.assertEquals(RepositoryState.Clean, await repo.state());
     }
 
-    testRepositoryOpenBare() {
-        Repository.init(this._tmpDirName, true);
+    async testRepositoryOpenBare() {
+        await Repository.init(this._tmpDirName, true);
 
-        const repo = Repository.open(this._tmpDirName);
+        const repo = await Repository.open(this._tmpDirName);
         __self.assertTrue(repo.isBare());
         __self.assertTrue(repo.isEmpty());
-        __self.assertEquals(RepositoryState.Clean, repo.state());
+        __self.assertEquals(RepositoryState.Clean, await repo.state());
     }
 }

@@ -1,12 +1,15 @@
 mod commit;
 mod credentials;
+mod fetch_options;
 mod object;
 mod reference;
 mod repository;
-#[cfg(test)]
-mod test;
+mod task;
 
 use napi::bindgen_prelude::*;
+
+#[cfg(test)]
+mod test;
 
 #[macro_use]
 extern crate napi_derive;
