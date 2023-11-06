@@ -6,14 +6,12 @@ use napi::bindgen_prelude::*;
 #[derive(Clone)]
 pub struct Commit {
   id: git2::Oid,
-  tree_id: git2::Oid,
 }
 
 impl Commit {
   pub(crate) fn from_raw(raw: git2::Commit) -> Self {
     Self {
       id: raw.id(),
-      tree_id: raw.tree_id(),
     }
   }
 }

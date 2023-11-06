@@ -1,20 +1,57 @@
 use crate::credentials::Credentials;
 use crate::object::Oid;
+use crate::task::{ConnectRemote, PushRemote};
 use crate::Direction;
 use anyhow::Result;
+use git2::{PushOptions, RemoteCallbacks, RemoteConnection};
 use napi::bindgen_prelude::*;
+use napi::tokio::sync::Mutex;
 use napi::JsUnknown;
+use std::pin::Pin;
+
+pub struct RemoteConn(RemoteConnection<'static, 'static, 'static>);
+unsafe impl Send for RemoteConn {}
 
 #[napi]
 pub struct Remote {
-  inner: git2::Remote<'static>,
+  inner: Mutex<git2::Remote<'static>>,
+  connection: Mutex<Pin<Box<Option<RemoteConn>>>>,
 }
 
 impl Remote {
   pub(crate) fn new(remote: git2::Remote<'_>) -> Self {
     Self {
-      inner: unsafe { std::mem::transmute(remote) },
+      inner: Mutex::new(unsafe { std::mem::transmute(remote) }),
+      connection: Mutex::new(Box::pin(None)),
     }
+  }
+
+  pub(crate) fn internal_connect(
+    &self,
+    direction: git2::Direction,
+    remote_callbacks: RemoteCallbacks,
+  ) -> Result<()> {
+    let mut remote = futures::executor::block_on(self.inner.lock());
+    let connection = remote.connect_auth(direction, Some(remote_callbacks), None)?;
+
+    let mut conn = futures::executor::block_on(self.connection.lock());
+    let _ = conn.insert(RemoteConn(unsafe { std::mem::transmute(connection) }));
+
+    Ok(())
+  }
+
+  pub(crate) fn internal_push(
+    &self,
+    ref_specs: &[String],
+    remote_callbacks: RemoteCallbacks,
+  ) -> Result<()> {
+    let mut po = PushOptions::default();
+    po.remote_callbacks(remote_callbacks);
+
+    let mut remote = futures::executor::block_on(self.inner.lock());
+    remote.push(ref_specs, Some(&mut po))?;
+
+    Ok(())
   }
 }
 
@@ -26,7 +63,7 @@ pub struct RemoteHead {
 }
 
 impl Remote {
-  fn prepare_remote_callbacks(
+  pub(crate) fn prepare_remote_callbacks(
     credentials_callback: Option<JsFunction>,
     env: &Env,
   ) -> Result<git2::RemoteCallbacks> {
@@ -73,30 +110,33 @@ impl Remote {
 impl Remote {
   #[napi]
   pub fn connect(
-    &mut self,
+    &self,
     direction: Direction,
     credentials_callback: Option<JsFunction>,
     env: Env,
-  ) -> Result<()> {
-    let dir = match direction {
-      Direction::Fetch => git2::Direction::Fetch,
-      Direction::Push => git2::Direction::Push,
+    this: Reference<Remote>,
+  ) -> napi::Result<AsyncTask<ConnectRemote>> {
+    let cb_ref = if let Some(f) = credentials_callback {
+      Some(env.create_reference(f)?)
+    } else {
+      None
     };
 
-    let cb = Self::prepare_remote_callbacks(credentials_callback, &env)?;
-    self.inner.connect_auth(dir, Some(cb), None)?;
+    Ok(AsyncTask::new(ConnectRemote::new(this, direction, cb_ref)))
+  }
+
+  #[napi]
+  pub async fn disconnect(&self) -> napi::Result<()> {
+    let mut inner = self.connection.lock().await;
+    drop(inner.take());
 
     Ok(())
   }
 
   #[napi]
-  pub fn disconnect(&mut self) -> Result<()> {
-    Ok(self.inner.disconnect()?)
-  }
-
-  #[napi]
-  pub fn reference_list(&self) -> Result<Vec<RemoteHead>> {
-    let list = self.inner.list().map_err(anyhow::Error::from)?;
+  pub async fn reference_list(&self) -> napi::Result<Vec<RemoteHead>> {
+    let inner = self.inner.lock().await;
+    let list = inner.list().map_err(anyhow::Error::from)?;
     Ok(
       list
         .iter()
@@ -111,6 +151,23 @@ impl Remote {
         })
         .collect(),
     )
+  }
+
+  #[napi]
+  pub fn push(
+    &self,
+    ref_specs: Vec<String>,
+    credentials_callback: Option<JsFunction>,
+    env: Env,
+    this: Reference<Remote>,
+  ) -> napi::Result<AsyncTask<PushRemote>> {
+    let cb_ref = if let Some(f) = credentials_callback {
+      Some(env.create_reference(f)?)
+    } else {
+      None
+    };
+
+    Ok(AsyncTask::new(PushRemote::new(this, ref_specs, cb_ref)))
   }
 }
 

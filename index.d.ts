@@ -53,9 +53,10 @@ export class Reference {
   name(): string | null
 }
 export class Remote {
-  connect(direction: Direction, credentialsCallback?: (...args: any[]) => any | undefined | null): void
-  disconnect(): void
-  referenceList(): Array<RemoteHead>
+  connect(direction: Direction, credentialsCallback?: (...args: any[]) => any | undefined | null): Promise<unknown>
+  disconnect(): Promise<void>
+  referenceList(): Promise<Array<RemoteHead>>
+  push(refSpecs: Array<string>, credentialsCallback?: (...args: any[]) => any | undefined | null): Promise<unknown>
 }
 export class RemoteHead {
   name(): string
