@@ -1,5 +1,4 @@
 use crate::object::Oid;
-use crate::repository::Repository;
 use napi::bindgen_prelude::*;
 
 #[napi]
@@ -11,11 +10,20 @@ pub enum ReferenceType {
 
 #[napi]
 pub struct Reference {
-  pub(crate) inner: SharedReference<Repository, git2::Reference<'static>>,
+  inner: git2::Reference<'static>,
+}
+
+impl Reference {
+  pub(crate) fn new(object: git2::Reference<'_>) -> Self {
+    Self {
+      inner: unsafe { std::mem::transmute(object) },
+    }
+  }
 }
 
 #[napi]
 impl Reference {
+  #[napi]
   pub fn kind(&self) -> ReferenceType {
     if self.inner.kind() == Some(git2::ReferenceType::Direct) {
       ReferenceType::Direct
@@ -24,17 +32,13 @@ impl Reference {
     }
   }
 
+  #[napi]
   pub fn target(&self) -> Option<Oid> {
     self.inner.target().map(Oid)
   }
 
+  #[napi]
   pub fn name(&self) -> Option<String> {
     self.inner.name().map(ToString::to_string)
-  }
-}
-
-impl From<SharedReference<Repository, git2::Reference<'static>>> for Reference {
-  fn from(value: SharedReference<Repository, git2::Reference<'static>>) -> Self {
-    Self { inner: value }
   }
 }

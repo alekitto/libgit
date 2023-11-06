@@ -2,22 +2,95 @@ use crate::commit::Commit;
 use crate::fetch_options::FetchOptions;
 use crate::object::Oid;
 use crate::reference::ReferenceType;
-use crate::task::{
-  CloneRepository, FetchRepository, InitRepository, OpenRepository, RepositoryStatus,
-};
-use crate::ResetType;
-use anyhow::Result;
+use crate::remote::Remote;
+use crate::task::{CloneRepository, FetchRepository, InitRepository, OpenRepository};
+use crate::{RepositoryState, ResetType};
 use napi::bindgen_prelude::*;
-use napi::Env;
+use napi::tokio::sync::Mutex;
+use napi::{Env, JsObject};
 
 #[napi]
 pub struct Repository {
-  pub(crate) repository: git2::Repository,
+  pub(crate) repository: Mutex<git2::Repository>,
+  is_bare: bool,
+  path: String,
 }
 
 impl From<git2::Repository> for Repository {
   fn from(value: git2::Repository) -> Self {
-    Self { repository: value }
+    Self::new(value)
+  }
+}
+
+impl Repository {
+  pub(crate) fn new(repository: git2::Repository) -> Self {
+    let is_bare = repository.is_bare();
+    let path = repository.path().to_string_lossy().to_string();
+
+    let this = Self {
+      repository: Mutex::new(repository),
+      is_bare,
+      path,
+    };
+
+    this
+  }
+
+  pub(crate) async fn internal_find_commit(&self, target: Oid) -> anyhow::Result<Commit> {
+    let repository = self.repository.lock().await;
+    let commit = repository.find_commit(target.0)?;
+
+    Ok(Commit::from_raw(commit))
+  }
+
+  async fn internal_create_branch(
+    &self,
+    name: String,
+    target: Oid,
+    force: bool,
+  ) -> anyhow::Result<crate::reference::Reference> {
+    let repository = self.repository.lock().await;
+    let commit = repository.find_commit(target.0)?;
+    let branch = repository.branch(&name, &commit, force)?;
+
+    Ok(crate::reference::Reference::new(branch.into_reference()))
+  }
+
+  async fn object_from_oid(&self, oid: git2::Oid) -> Result<crate::object::Object> {
+    let repository = self.repository.lock().await;
+    let object = repository
+      .find_object(oid, None)
+      .map_err(anyhow::Error::from)?;
+
+    match object.kind() {
+      Some(git2::ObjectType::Commit) | Some(git2::ObjectType::Tag) => {
+        Ok(crate::object::Object::new(object))
+      }
+      _ => Err(anyhow::Error::msg("Invalid object type").into()),
+    }
+  }
+
+  pub(crate) fn internal_fetch(
+    &self,
+    remote_name: String,
+    fo: &mut git2::FetchOptions<'_>,
+    prune: bool,
+  ) -> anyhow::Result<()> {
+    let repository = futures::executor::block_on(self.repository.lock());
+    let mut remote = repository
+      .find_remote(&remote_name)
+      .or_else(|_| repository.remote_anonymous(&remote_name))
+      .map_err(anyhow::Error::from)?;
+
+    remote.download(&[] as &[&str], Some(fo))?;
+    remote.disconnect()?;
+
+    remote.update_tips(None, true, git2::AutotagOption::Unspecified, None)?;
+    if prune {
+      remote.prune(None)?;
+    }
+
+    Ok(())
   }
 }
 
@@ -50,38 +123,79 @@ impl Repository {
   }
 
   #[napi]
-  pub fn namespace(&self) -> Option<String> {
-    self.repository.namespace().map(ToString::to_string)
+  pub async fn namespace(&self) -> Option<String> {
+    let repository = self.repository.lock().await;
+    repository.namespace().map(ToString::to_string)
   }
 
   #[napi]
   pub fn is_bare(&self) -> bool {
-    self.repository.is_bare()
+    self.is_bare
   }
 
   #[napi]
-  pub fn is_empty(&self) -> Result<bool> {
-    Ok(self.repository.is_empty()?)
+  pub async fn is_empty(&self) -> napi::Result<bool> {
+    let repository = self.repository.lock().await;
+    Ok(repository.is_empty().map_err(anyhow::Error::from)?)
   }
 
   #[napi]
   pub fn path(&self) -> String {
-    self.repository.path().to_string_lossy().to_string()
+    self.path.clone()
   }
 
   #[napi(ts_return_type = "Promise<RepositoryState>")]
-  pub fn state(&self, this: Reference<Repository>) -> AsyncTask<RepositoryStatus> {
-    AsyncTask::new(RepositoryStatus::new(this))
+  pub async fn state(&self) -> RepositoryState {
+    let repository = self.repository.lock().await;
+    RepositoryState::from(repository.state())
   }
 
-  #[napi]
+  #[napi(ts_return_type = "Promise<Commit>")]
   pub fn find_commit(
     &self,
     target: ClassInstance<Oid>,
-    reference: Reference<Repository>,
+    this: Reference<Repository>,
     env: Env,
-  ) -> Result<Commit> {
-    Commit::find(reference, target.clone(), env)
+  ) -> Result<JsObject> {
+    let oid = target.clone();
+    let (deferred, promise) = env.create_deferred()?;
+    napi::tokio::spawn(async move {
+      match this.internal_find_commit(oid).await {
+        Ok(commit) => {
+          deferred.resolve(|_| Ok(commit));
+        }
+        Err(e) => deferred.reject(e.into()),
+      };
+    });
+
+    Ok(promise)
+  }
+
+  #[napi(ts_return_type = "Promise<Remote>")]
+  pub fn create_remote(
+    &self,
+    name: String,
+    url: String,
+    this: Reference<Repository>,
+    env: Env,
+  ) -> Result<JsObject> {
+    let (deferred, promise) = env.create_deferred()?;
+    napi::tokio::spawn(async move {
+      let repository = this.repository.lock().await;
+      let remote = repository.remote(&name, &url).map_err(anyhow::Error::from);
+
+      let remote = match remote {
+        Ok(r) => Remote::new(r),
+        Err(e) => {
+          deferred.reject(e.into());
+          return;
+        }
+      };
+
+      deferred.resolve(|_| Ok(remote));
+    });
+
+    Ok(promise)
   }
 
   #[napi]
@@ -90,29 +204,28 @@ impl Repository {
     name: String,
     commit: Either3<ClassInstance<Commit>, ClassInstance<Oid>, String>,
     force: bool,
-    this_ref: Reference<Repository>,
+    this: Reference<Repository>,
     env: Env,
-  ) -> Result<crate::reference::Reference> {
-    let commit = match commit {
-      Either3::A(commit) => Commit::find(this_ref.clone(env)?, commit.oid(), env)?,
-      Either3::B(oid) => Commit::find(this_ref.clone(env)?, oid.as_ref().clone(), env)?,
-      Either3::C(commit_sha) => {
-        let oid = git2::Oid::from_str(&commit_sha)?;
-        Commit::find(this_ref.clone(env)?, Oid(oid), env)?
-      }
+  ) -> Result<JsObject> {
+    let oid = match commit {
+      Either3::A(commit) => commit.oid(),
+      Either3::B(oid) => oid.clone(),
+      Either3::C(commit_sha) => Oid(git2::Oid::from_str(&commit_sha).map_err(anyhow::Error::from)?),
     };
 
-    let inner = this_ref.share_with(env, |repository| {
-      Ok(
-        repository
-          .repository
-          .branch(&name, &commit.inner, force)
-          .map_err(anyhow::Error::from)?
-          .into_reference(),
-      )
-    })?;
+    let (deferred, promise) = env.create_deferred()?;
+    napi::tokio::spawn(async move {
+      match this.internal_create_branch(name, oid, force).await {
+        Ok(branch) => {
+          deferred.resolve(|_| Ok(branch));
+        }
+        Err(e) => {
+          deferred.reject(e.into());
+        }
+      };
+    });
 
-    Ok(crate::reference::Reference { inner })
+    Ok(promise)
   }
 
   #[napi(ts_return_type = "Promise<void>")]
@@ -120,38 +233,28 @@ impl Repository {
     &self,
     options: Option<FetchOptions>,
     env: Env,
-    repo: Reference<Repository>,
+    this: Reference<Repository>,
   ) -> Result<AsyncTask<FetchRepository>> {
     let opts = options.unwrap_or_default();
-    Ok(AsyncTask::new(FetchRepository::new(
-      repo,
-      opts.into_fetch_opts(&env)?,
-    )))
+    let fetch_opts = opts.into_fetch_opts(&env)?;
+
+    Ok(AsyncTask::new(FetchRepository::new(this, fetch_opts)))
   }
 
   #[napi]
-  pub fn get_current_branch(
-    &self,
-    this_ref: Reference<Repository>,
-    env: Env,
-  ) -> Result<crate::reference::Reference> {
-    self.head(this_ref, env)
+  pub async fn get_current_branch(&self) -> Result<crate::reference::Reference> {
+    self.head().await
   }
 
   #[napi]
-  pub fn head(
-    &self,
-    this_ref: Reference<Repository>,
-    env: Env,
-  ) -> Result<crate::reference::Reference> {
-    let inner = this_ref.share_with(env, |repository| {
-      Ok(repository.repository.head().map_err(anyhow::Error::from)?)
-    })?;
+  pub async fn head(&self) -> Result<crate::reference::Reference> {
+    let repository = self.repository.lock().await;
+    let head = repository.head().map_err(anyhow::Error::from)?;
 
-    Ok(crate::reference::Reference { inner })
+    Ok(crate::reference::Reference::new(head))
   }
 
-  #[napi]
+  #[napi(ts_return_type = "Promise<void>")]
   pub fn reset(
     &self,
     target: Either3<
@@ -160,96 +263,97 @@ impl Repository {
       ClassInstance<Oid>,
     >,
     reset_type: Option<ResetType>,
+    this: Reference<Repository>,
     env: Env,
-    this_ref: Reference<Repository>,
-  ) -> Result<()> {
-    let object = match target {
-      Either3::A(commit) => (*commit).as_object(env),
+  ) -> Result<JsObject> {
+    let target = match target {
+      Either3::A(commit) => Either::A(commit.clone()),
       Either3::B(reference) => {
         let oid = reference
           .target()
           .ok_or_else(|| anyhow::Error::msg("Cannot find reference target"))?;
-        Ok(crate::object::Object::from(Self::shared_object_from_oid(
-          oid.0, env, this_ref,
-        )?))
+
+        Either::B(oid)
       }
-      Either3::C(oid) => Ok(crate::object::Object::from(Self::shared_object_from_oid(
-        oid.0, env, this_ref,
-      )?)),
-    }?;
+      Either3::C(oid) => Either::B(*oid),
+    };
 
-    self.repository.reset(
-      object.inner(),
-      reset_type.unwrap_or(ResetType::Mixed).into(),
-      None,
-    )?;
+    let (deferred, promise) = env.create_deferred()?;
+    napi::tokio::spawn(async move {
+      let object = match target {
+        Either::A(commit) => commit.as_object(&this).await,
+        Either::B(oid) => this.object_from_oid(oid.0).await,
+      };
 
-    Ok(())
-  }
+      let object = match object {
+        Ok(object) => object,
+        Err(e) => {
+          deferred.reject(e.into());
+          return;
+        }
+      };
 
-  fn shared_object_from_oid(
-    oid: git2::Oid,
-    env: Env,
-    this_ref: Reference<Repository>,
-  ) -> Result<SharedReference<Repository, git2::Object<'static>>> {
-    Ok(this_ref.share_with(env, |repo| {
-      let object = repo
-        .repository
-        .find_object(oid, None)
-        .map_err(anyhow::Error::from)?;
-      match object.kind() {
-        Some(git2::ObjectType::Commit) | Some(git2::ObjectType::Tag) => Ok(object),
-        _ => Err(anyhow::Error::msg("Invalid object type").into()),
-      }
-    })?)
+      let repository = this.repository.lock().await;
+      let result = repository
+        .reset(
+          object.inner(),
+          reset_type.unwrap_or(ResetType::Mixed).into(),
+          None,
+        )
+        .map_err(anyhow::Error::from);
+
+      match result {
+        Ok(_) => {
+          deferred.resolve(|_| Ok(()));
+        }
+        Err(e) => deferred.reject(e.into()),
+      };
+    });
+
+    Ok(promise)
   }
 
   #[napi]
-  pub fn get_reference(
+  pub async fn get_reference(&self, reference: String) -> Result<crate::reference::Reference> {
+    let repository = self.repository.lock().await;
+    let reference = repository
+      .find_reference(&reference)
+      .map_err(anyhow::Error::from)?;
+
+    Ok(crate::reference::Reference::new(reference))
+  }
+
+  #[napi]
+  pub async fn get_reference_names(
     &self,
-    reference: String,
-    this_ref: Reference<Repository>,
-    env: Env,
-  ) -> Result<crate::reference::Reference> {
-    let inner = this_ref.share_with(env, |repository| {
-      Ok(
-        repository
-          .repository
-          .find_reference(&reference)
-          .map_err(anyhow::Error::from)?,
-      )
-    })?;
-
-    Ok(crate::reference::Reference { inner })
-  }
-
-  #[napi]
-  pub fn get_reference_names(&self, reference_type: Option<ReferenceType>) -> Result<Vec<String>> {
-    Ok(
-      self
-        .repository
-        .references()?
-        .filter_map(|r| {
-          if let Ok(r) = r {
-            r.name().map(|n| (r.kind(), n.to_string()))
+    reference_type: Option<ReferenceType>,
+  ) -> Result<Vec<String>> {
+    let repository = self.repository.lock().await;
+    let refs = repository
+      .references()
+      .map_err(anyhow::Error::from)?
+      .filter_map(|r| {
+        if let Ok(r) = r {
+          r.name().map(|n| (r.kind(), n.to_string()))
+        } else {
+          None
+        }
+      })
+      .filter_map(|(kind, name)| {
+        if let Some(rt) = reference_type {
+          if (rt == ReferenceType::Direct && kind == Some(git2::ReferenceType::Direct))
+            || (rt == ReferenceType::Symbolic && kind == Some(git2::ReferenceType::Symbolic))
+          {
+            Some(name)
           } else {
             None
           }
-        })
-        .filter_map(|(kind, name)| {
-          if let Some(rt) = reference_type {
-            if (rt == ReferenceType::Direct && kind == Some(git2::ReferenceType::Direct))
-              || (rt == ReferenceType::Symbolic && kind == Some(git2::ReferenceType::Symbolic))
-            {
-              Some(name)
-            } else {
-              None
-            }
-          } else {
-            None
-          }
-        })
-        .collect(),
-    )
+        } else {
+          None
+        }
+      })
+      .collect();
+
+    Ok(refs)
   }
 }

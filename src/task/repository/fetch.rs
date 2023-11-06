@@ -39,17 +39,7 @@ fn fetch(repository: &Repository, fetch_options: &FetchOpts, env: &Env) -> Resul
     .unwrap_or_else(|| "origin".to_string());
 
   let mut fo = fetch_options.to_git_fetch_opts(&env)?;
-  let mut remote = repository
-    .repository
-    .find_remote(&remote_name)
-    .or_else(|_| repository.repository.remote_anonymous(&remote_name))?;
-  remote.download(&[] as &[&str], Some(&mut fo))?;
-  remote.disconnect()?;
-
-  remote.update_tips(None, true, git2::AutotagOption::Unspecified, None)?;
-  if fetch_options.prune.unwrap_or(false) {
-    remote.prune(None)?;
-  }
+  repository.internal_fetch(remote_name, &mut fo, fetch_options.prune.unwrap_or(false))?;
 
   Ok(())
 }

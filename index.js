@@ -17,7 +17,7 @@ function isMusl() {
   // For Node 10
   if (!process.report || typeof process.report.getReport !== 'function') {
     try {
-      const lddPath = require('child_process').execSync('which ldd').toString().trim();
+      const lddPath = require('child_process').execSync('which ldd').toString().trim()
       return readFileSync(lddPath, 'utf8').includes('musl')
     } catch (e) {
       return true
@@ -252,7 +252,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { Commit, Credentials, Oid, Object, ReferenceType, Reference, Repository, RepositoryState, ResetType } = nativeBinding
+const { Commit, Credentials, Oid, Object, ReferenceType, Reference, Remote, RemoteHead, Repository, RepositoryState, ResetType, Direction } = nativeBinding
 
 module.exports.Commit = Commit
 module.exports.Credentials = Credentials
@@ -260,6 +260,9 @@ module.exports.Oid = Oid
 module.exports.Object = Object
 module.exports.ReferenceType = ReferenceType
 module.exports.Reference = Reference
+module.exports.Remote = Remote
+module.exports.RemoteHead = RemoteHead
 module.exports.Repository = Repository
 module.exports.RepositoryState = RepositoryState
 module.exports.ResetType = ResetType
+module.exports.Direction = Direction

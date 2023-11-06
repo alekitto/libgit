@@ -2,8 +2,6 @@ use crate::credentials::Credentials;
 use anyhow::Result;
 use napi::bindgen_prelude::{ClassInstance, FromNapiValue};
 use napi::{Env, JsFunction, JsUnknown, Ref};
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
 
 #[napi(object)]
 #[derive(Default)]
@@ -20,14 +18,11 @@ impl FetchOptions {
     let ret = FetchOpts {
       remote: self.remote,
       prune: self.prune,
-      credentials_callback: Lazy::new(Default::default),
+      credentials_callback: self
+        .credentials_callback
+        .and_then(|cred_cb| env.create_reference(cred_cb).ok()),
       skip_certificate_check: self.skip_certificate_check,
     };
-
-    if let Some(cred_cb) = self.credentials_callback {
-      let mut guard = ret.credentials_callback.lock().unwrap();
-      let _ = guard.insert(env.create_reference(cred_cb)?);
-    }
 
     Ok(ret)
   }
@@ -36,7 +31,7 @@ impl FetchOptions {
 pub struct FetchOpts {
   pub remote: Option<String>,
   pub prune: Option<bool>,
-  pub credentials_callback: Lazy<Mutex<Option<Ref<()>>>>,
+  pub credentials_callback: Option<Ref<()>>,
   pub skip_certificate_check: Option<bool>,
 }
 
@@ -45,8 +40,7 @@ impl FetchOpts {
     let mut cb = git2::RemoteCallbacks::default();
 
     {
-      let guard = self.credentials_callback.lock().unwrap();
-      if let Some(cred_cb_ref) = guard.as_ref() {
+      if let Some(cred_cb_ref) = self.credentials_callback.as_ref() {
         let cred_cb: JsFunction = env.get_reference_value(cred_cb_ref)?;
         cb.credentials(move |url, username, _| {
           (|| -> Result<ClassInstance<Credentials>, anyhow::Error> {

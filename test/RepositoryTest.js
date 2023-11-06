@@ -22,14 +22,14 @@ export default class RepositoryTest extends TestCase {
     async testRepositoryInit() {
         const repo = await Repository.init(this._tmpDirName);
         __self.assertFalse(repo.isBare());
-        __self.assertTrue(repo.isEmpty());
+        __self.assertTrue(await repo.isEmpty());
     }
 
     async testRepositoryInitBare() {
         const repo = await Repository.init(this._tmpDirName, true);
         __self.assertTrue(repo.isBare());
-        __self.assertTrue(repo.isEmpty());
-        __self.assertNull(repo.namespace());
+        __self.assertTrue(await repo.isEmpty());
+        __self.assertNull(await repo.namespace());
     }
 
     async testRepositoryOpen() {
@@ -37,7 +37,7 @@ export default class RepositoryTest extends TestCase {
 
         const repo = await Repository.open(this._tmpDirName);
         __self.assertFalse(repo.isBare());
-        __self.assertTrue(repo.isEmpty());
+        __self.assertTrue(await repo.isEmpty());
         __self.assertEquals(RepositoryState.Clean, await repo.state());
     }
 
@@ -46,7 +46,7 @@ export default class RepositoryTest extends TestCase {
 
         const repo = await Repository.open(this._tmpDirName);
         __self.assertTrue(repo.isBare());
-        __self.assertTrue(repo.isEmpty());
+        __self.assertTrue(await repo.isEmpty());
         __self.assertEquals(RepositoryState.Clean, await repo.state());
     }
 }

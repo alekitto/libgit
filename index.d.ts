@@ -32,8 +32,12 @@ export const enum ResetType {
   Hard = 1,
   Mixed = 2
 }
+export const enum Direction {
+  Fetch = 0,
+  Push = 1
+}
 export class Commit {
-  asObject(): object
+  asObject(repository: Repository): Promise<object>
   oid(): Oid
 }
 export class Credentials {
@@ -43,22 +47,38 @@ export class Credentials {
 }
 export class Oid { }
 export class Object { }
-export class Reference { }
+export class Reference {
+  kind(): ReferenceType
+  target(): Oid | null
+  name(): string | null
+}
+export class Remote {
+  connect(direction: Direction, credentialsCallback?: (...args: any[]) => any | undefined | null): void
+  disconnect(): void
+  referenceList(): Array<RemoteHead>
+}
+export class RemoteHead {
+  name(): string
+  oid(): Oid
+  isLocal(): boolean
+  localOid(): Oid | null
+}
 export class Repository {
   static init(path: string, bare?: boolean | undefined | null): Promise<Repository>
   static open(path: string): Promise<Repository>
   static clone(url: string, path: string, recursive?: boolean | undefined | null, fetchOptions?: FetchOptions | undefined | null): Promise<Repository>
-  namespace(): string | null
+  namespace(): Promise<string | null>
   isBare(): boolean
-  isEmpty(): boolean
+  isEmpty(): Promise<boolean>
   path(): string
   state(): Promise<RepositoryState>
-  findCommit(target: Oid): Commit
-  createBranch(name: string, commit: Commit | Oid | string, force: boolean): Reference
+  findCommit(target: Oid): Promise<Commit>
+  createRemote(name: string, url: string): Promise<Remote>
+  createBranch(name: string, commit: Commit | Oid | string, force: boolean): object
   fetch(options?: FetchOptions | undefined | null): Promise<void>
-  getCurrentBranch(): Reference
-  head(): Reference
-  reset(target: Commit | Reference | Oid, resetType?: ResetType | undefined | null): void
-  getReference(reference: string): Reference
-  getReferenceNames(referenceType?: ReferenceType | undefined | null): Array<string>
+  getCurrentBranch(): Promise<Reference>
+  head(): Promise<Reference>
+  reset(target: Commit | Reference | Oid, resetType?: ResetType | undefined | null): Promise<void>
+  getReference(reference: string): Promise<Reference>
+  getReferenceNames(referenceType?: ReferenceType | undefined | null): Promise<Array<string>>
 }

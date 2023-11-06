@@ -8,7 +8,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0"
-git2 = { version = "0.17", features = ["default", "https", "ssh", "ssh_key_from_memory", "vendored-libgit2", "vendored-openssl"] }
+futures = "0.3.29"
+git2 = { git = "https://github.com/alekitto/git2-rs.git", features = ["default", "https", "ssh", "ssh_key_from_memory", "vendored-libgit2", "vendored-openssl"] }
+libgit2-sys = { git = "https://github.com/alekitto/git2-rs.git" }
 napi = { version = "2.12", default-features = false, features = ["anyhow", "async", "error_anyhow", "napi7", "tokio_rt"] }
 napi-derive = "2.12"
 once_cell = "1.17"

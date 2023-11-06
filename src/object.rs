@@ -1,24 +1,32 @@
-use crate::repository::Repository;
-use napi::bindgen_prelude::SharedReference;
-use std::ops::Deref;
-
 #[napi]
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct Oid(pub(crate) git2::Oid);
 
-#[napi]
-pub struct Object {
-  inner: SharedReference<Repository, git2::Object<'static>>,
-}
-
-impl Object {
-  pub(crate) fn inner(&self) -> &git2::Object {
-    self.inner.deref()
+impl From<git2::Oid> for Oid {
+  fn from(value: git2::Oid) -> Self {
+    Oid(value)
   }
 }
 
-impl From<SharedReference<Repository, git2::Object<'static>>> for Object {
-  fn from(value: SharedReference<Repository, git2::Object<'static>>) -> Self {
-    Self { inner: value }
+#[napi]
+pub struct Object {
+  inner: git2::Object<'static>,
+}
+
+impl From<git2::Object<'_>> for Object {
+  fn from(value: git2::Object<'_>) -> Self {
+    Self::new(value)
+  }
+}
+
+impl Object {
+  pub(crate) fn new(object: git2::Object<'_>) -> Self {
+    Self {
+      inner: unsafe { std::mem::transmute(object) },
+    }
+  }
+
+  pub(crate) fn inner(&self) -> &git2::Object {
+    &self.inner
   }
 }
