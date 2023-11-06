@@ -53,10 +53,10 @@ export class Reference {
   name(): string | null
 }
 export class Remote {
-  connect(direction: Direction, credentialsCallback?: (...args: any[]) => any | undefined | null): Promise<unknown>
+  connect(direction: Direction, credentialsCallback?: (url: string, username?: string) => Credentials): Promise<void>
   disconnect(): Promise<void>
   referenceList(): Promise<Array<RemoteHead>>
-  push(refSpecs: Array<string>, credentialsCallback?: (...args: any[]) => any | undefined | null): Promise<unknown>
+  push(refSpecs: Array<string>, credentialsCallback?: (url: string, username?: string) => Credentials): Promise<unknown>
 }
 export class RemoteHead {
   name(): string

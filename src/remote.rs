@@ -108,11 +108,11 @@ impl Remote {
 
 #[napi]
 impl Remote {
-  #[napi]
+  #[napi(ts_return_type = "Promise<void>")]
   pub fn connect(
     &self,
     direction: Direction,
-    credentials_callback: Option<JsFunction>,
+    #[napi(ts_arg_type = "(url: string, username?: string) => Credentials")] credentials_callback: Option<JsFunction>,
     env: Env,
     this: Reference<Remote>,
   ) -> napi::Result<AsyncTask<ConnectRemote>> {
@@ -153,11 +153,11 @@ impl Remote {
     )
   }
 
-  #[napi]
+  #[napi(ts_return_type = "Promise<void>")]
   pub fn push(
     &self,
     ref_specs: Vec<String>,
-    credentials_callback: Option<JsFunction>,
+    #[napi(ts_arg_type = "(url: string, username?: string) => Credentials")] credentials_callback: Option<JsFunction>,
     env: Env,
     this: Reference<Remote>,
   ) -> napi::Result<AsyncTask<PushRemote>> {
