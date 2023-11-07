@@ -1,6 +1,7 @@
 mod commit;
 mod credentials;
 mod fetch_options;
+mod index;
 mod object;
 mod reference;
 mod remote;

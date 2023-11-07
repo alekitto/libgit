@@ -1,18 +1,22 @@
-use crate::repository::Repository;
+use crate::repository::{InitOptions, Repository};
 use anyhow::Result;
+use git2::RepositoryInitOptions;
 use napi::bindgen_prelude::*;
 use std::path::Path;
 
+#[derive(Default)]
 pub struct InitRepository {
   path: String,
   bare: bool,
+  initial_head: Option<String>,
 }
 
 impl InitRepository {
-  pub fn new<P: AsRef<Path>>(path: P, bare: bool) -> Self {
+  pub fn new<P: AsRef<Path>>(path: P, options: InitOptions) -> Self {
     Self {
       path: path.as_ref().to_string_lossy().to_string(),
-      bare,
+      bare: options.bare.unwrap_or(false),
+      initial_head: options.initial_head,
     }
   }
 }
@@ -23,7 +27,7 @@ impl Task for InitRepository {
   type JsValue = Repository;
 
   fn compute(&mut self) -> napi::Result<Self::Output> {
-    Ok(init(&self.path, self.bare)?)
+    Ok(init(self)?)
   }
 
   fn resolve(&mut self, _: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
@@ -31,18 +35,23 @@ impl Task for InitRepository {
   }
 }
 
-pub(super) fn init<P: AsRef<Path>>(path: P, bare: bool) -> Result<git2::Repository> {
-  if bare {
-    git2::Repository::init_bare(path)
-  } else {
-    git2::Repository::init(path)
+pub(super) fn init(task: &InitRepository) -> Result<git2::Repository> {
+  let bare = task.bare;
+  let path: &Path = task.path.as_ref();
+
+  let mut opts = RepositoryInitOptions::new();
+  opts.bare(bare);
+  if let Some(h) = task.initial_head.as_deref() {
+    opts.initial_head(h);
   }
-  .map_err(anyhow::Error::from)
+
+  git2::Repository::init_opts(path, &opts).map_err(anyhow::Error::from)
 }
 
 #[cfg(test)]
 mod tests {
   use crate::task::repository::init::init;
+  use crate::task::InitRepository;
   use tempfile::TempDir;
 
   #[test]
@@ -50,7 +59,12 @@ mod tests {
     let td = TempDir::new().unwrap();
     let path = td.path();
 
-    let repo = init(path.to_string_lossy().to_string(), false).unwrap();
+    let repo = init(&InitRepository {
+      path: path.to_string_lossy().to_string(),
+      bare: false,
+      ..Default::default()
+    })
+    .unwrap();
     assert!(!repo.is_bare());
   }
 
@@ -59,7 +73,12 @@ mod tests {
     let td = TempDir::new().unwrap();
     let path = td.path();
 
-    let repo = init(path.to_string_lossy().to_string(), true).unwrap();
+    let repo = init(&InitRepository {
+      path: path.to_string_lossy().to_string(),
+      bare: true,
+      ..Default::default()
+    })
+    .unwrap();
     assert!(repo.is_bare());
     assert!(repo.namespace().is_none());
   }

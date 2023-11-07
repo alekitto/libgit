@@ -56,6 +56,7 @@ export class Time {
   offset: number
 }
 export class Signature {
+  constructor(name: string, email: string, time: Time)
   name(): string | null
   email(): string | null
   time(): Time
@@ -64,6 +65,10 @@ export class Credentials {
   static default(): Credentials
   static usernameAndPassword(username: string, password: string): Credentials
   static sshKeyFromMemory(username: string, publicKey: string | undefined | null, privateKey: string, passphrase?: string | undefined | null): Credentials
+}
+export class Index {
+  addPath(path: string): Promise<void>
+  writeTree(): Promise<Oid>
 }
 export class Oid {
   toString(): string
@@ -90,7 +95,7 @@ export class RemoteHead {
   localOid(): Oid | null
 }
 export class Repository {
-  static init(path: string, bare?: boolean | undefined | null): Promise<Repository>
+  static init(path: string, options?: InitOptions | undefined | null): Promise<Repository>
   static open(path: string): Promise<Repository>
   static clone(url: string, path: string, recursive?: boolean | undefined | null, fetchOptions?: FetchOptions | undefined | null): Promise<Repository>
   namespace(): Promise<string | null>
@@ -99,9 +104,12 @@ export class Repository {
   path(): string
   state(): Promise<RepositoryState>
   findCommit(target: Oid): Promise<Commit>
+  findTree(target: Oid): Promise<Tree>
   createRemote(name: string, url: string): Promise<Remote>
   createBranch(name: string, commit: Commit | Oid | string, force: boolean): object
   getBranchCommit(name: string | Reference): Promise<Commit>
+  index(): Promise<Index>
+  signature(): Promise<Signature>
   createCommit(updateRef: string | undefined | null, author: Signature, committer: Signature, message: string, tree: Tree, parents: Array<Commit>): Promise<Oid>
   fetch(options?: FetchOptions | undefined | null): Promise<void>
   getCurrentBranch(): Promise<Reference>
@@ -110,6 +118,11 @@ export class Repository {
   getReference(reference: string): Promise<Reference>
   getReferenceNames(referenceType?: ReferenceType | undefined | null): Promise<Array<string>>
   createRevWalk(): Promise<Revwalk>
+}
+export class InitOptions {
+  constructor()
+  setBare(bare: boolean): void
+  setInitialHead(head?: string | undefined | null): void
 }
 export class Revwalk {
   push(oid: Oid): object

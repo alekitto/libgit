@@ -1,5 +1,6 @@
 use crate::commit::{Commit, Signature};
 use crate::fetch_options::FetchOptions;
+use crate::index::Index;
 use crate::object::Oid;
 use crate::reference::ReferenceType;
 use crate::remote::Remote;
@@ -45,6 +46,13 @@ impl Repository {
     let commit = repository.find_commit(target.0)?;
 
     Ok(Commit::from(commit))
+  }
+
+  pub(crate) async fn internal_find_tree(&self, target: Oid) -> anyhow::Result<Tree> {
+    let repository = self.repository.lock().await;
+    let tree = repository.find_tree(target.0)?;
+
+    Ok(Tree::from(tree))
   }
 
   pub(crate) async fn internal_create_commit(
@@ -129,10 +137,41 @@ impl Repository {
 }
 
 #[napi]
+#[derive(Default, Clone)]
+pub struct InitOptions {
+  pub(crate) bare: Option<bool>,
+  pub(crate) initial_head: Option<String>,
+}
+
+#[napi]
+impl InitOptions {
+  #[napi(constructor)]
+  pub fn new() -> InitOptions {
+    Default::default()
+  }
+
+  #[napi]
+  pub fn set_bare(&mut self, bare: bool) {
+    let _ = self.bare.insert(bare);
+  }
+
+  #[napi]
+  pub fn set_initial_head(&mut self, head: Option<String>) {
+    self.initial_head = head;
+  }
+}
+
+#[napi]
 impl Repository {
   #[napi(ts_return_type = "Promise<Repository>")]
-  pub fn init(path: String, bare: Option<bool>) -> AsyncTask<InitRepository> {
-    AsyncTask::new(InitRepository::new(path, bare.unwrap_or(false)))
+  pub fn init(
+    path: String,
+    options: Option<ClassInstance<InitOptions>>,
+  ) -> AsyncTask<InitRepository> {
+    AsyncTask::new(InitRepository::new(
+      path,
+      options.map(|o| o.as_ref().clone()).unwrap_or_default(),
+    ))
   }
 
   #[napi(ts_return_type = "Promise<Repository>")]
@@ -197,6 +236,27 @@ impl Repository {
       match this.internal_find_commit(oid).await {
         Ok(commit) => {
           deferred.resolve(|_| Ok(commit));
+        }
+        Err(e) => deferred.reject(e.into()),
+      };
+    });
+
+    Ok(promise)
+  }
+
+  #[napi(ts_return_type = "Promise<Tree>")]
+  pub fn find_tree(
+    &self,
+    target: ClassInstance<Oid>,
+    this: Reference<Repository>,
+    env: Env,
+  ) -> Result<JsObject> {
+    let oid = *target;
+    let (deferred, promise) = env.create_deferred()?;
+    napi::tokio::spawn(async move {
+      match this.internal_find_tree(oid).await {
+        Ok(tree) => {
+          deferred.resolve(|_| Ok(tree));
         }
         Err(e) => deferred.reject(e.into()),
       };
@@ -279,6 +339,22 @@ impl Repository {
     };
 
     Ok(AsyncTask::new(GetBranchCommit::new(this, reference)))
+  }
+
+  #[napi]
+  pub async fn index(&self) -> Result<Index> {
+    let repository = self.repository.lock().await;
+    Ok(Index::from(
+      repository.index().map_err(anyhow::Error::from)?,
+    ))
+  }
+
+  #[napi]
+  pub async fn signature(&self) -> Result<Signature> {
+    let repository = self.repository.lock().await;
+    Ok(Signature::from(
+      repository.signature().map_err(anyhow::Error::from)?,
+    ))
   }
 
   #[napi(ts_return_type = "Promise<Oid>")]

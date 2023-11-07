@@ -83,6 +83,15 @@ pub struct Signature {
 
 #[napi]
 impl Signature {
+  #[napi(constructor)]
+  pub fn new(name: String, email: String, time: ClassInstance<Time>) -> Self {
+    Self {
+      name: Some(name),
+      email: Some(email),
+      time: *time,
+    }
+  }
+
   #[napi]
   pub fn name(&self) -> Option<String> {
     self.name.clone()
