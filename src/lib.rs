@@ -1,4 +1,5 @@
 mod commit;
+mod config;
 mod credentials;
 mod fetch_options;
 mod index;

@@ -47,6 +47,20 @@ impl Revwalk {
   }
 
   #[napi]
+  pub fn push_range(&self, range: String, this: Reference<Revwalk>, env: Env) -> Result<JsObject> {
+    let (deferred, promise) = env.create_deferred()?;
+    napi::tokio::spawn(async move {
+      let mut inner = this.inner.lock().await;
+      match inner.push_range(&range).map_err(anyhow::Error::from) {
+        Ok(()) => deferred.resolve(|_| Ok(())),
+        Err(e) => deferred.reject(e.into()),
+      }
+    });
+
+    Ok(promise)
+  }
+
+  #[napi]
   pub async fn next(&self) -> Result<Option<Oid>> {
     let mut inner = self.inner.lock().await;
     let o = inner.next();

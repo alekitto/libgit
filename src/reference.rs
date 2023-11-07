@@ -23,6 +23,12 @@ impl Reference {
 
 #[napi]
 impl Reference {
+  #[allow(clippy::inherent_to_string)]
+  #[napi]
+  pub fn to_string(&self) -> String {
+    self.name().unwrap_or_default()
+  }
+
   #[napi]
   pub fn kind(&self) -> ReferenceType {
     if self.inner.kind() == Some(git2::ReferenceType::Direct) {

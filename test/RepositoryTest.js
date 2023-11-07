@@ -62,6 +62,10 @@ export default class RepositoryTest extends TestCase {
         opts.setInitialHead('master');
 
         const repo = await Repository.init(this._tmpDirName, opts);
+        const config = await repo.config();
+        config.setStr('user.name', 'test');
+        config.setStr('user.email', 'test@example.com');
+
         const sig = await repo.signature();
 
         const file = new File(this._tmpDirName + '/README.md');
@@ -88,13 +92,12 @@ export default class RepositoryTest extends TestCase {
         const tmpDirName = tmpdir() + '/' + randomBytes(5).toString('base64').replace(/[^0-9a-z]/i, '-');
         try {
             await Repository.clone('file://' + this._tmpDirName, tmpDirName);
-            debugger;
             const r2 = await Repository.open(tmpDirName);
             const commit = await r2.getBranchCommit('refs/heads/master');
 
             __self.assertEquals('first commit', commit.messageRaw());
         } finally {
-            await fs.mkdir(tmpDirName);
+            await fs.remove(tmpDirName);
         }
     }
 }

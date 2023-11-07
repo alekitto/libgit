@@ -1,4 +1,5 @@
 use crate::commit::{Commit, Signature};
+use crate::config::Config;
 use crate::fetch_options::FetchOptions;
 use crate::index::Index;
 use crate::object::Oid;
@@ -398,6 +399,14 @@ impl Repository {
     let head = repository.head().map_err(anyhow::Error::from)?;
 
     Ok(crate::reference::Reference::new(head))
+  }
+
+  #[napi]
+  pub async fn config(&self) -> Result<Config> {
+    let repository = self.repository.lock().await;
+    let config = repository.config().map_err(anyhow::Error::from)?;
+
+    Ok(config.into())
   }
 
   #[napi(ts_return_type = "Promise<void>")]

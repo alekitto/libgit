@@ -252,11 +252,12 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { Commit, Time, Signature, Credentials, Index, Oid, Object, ReferenceType, Reference, Remote, RemoteHead, Repository, InitOptions, Revwalk, Tree, TreeEntry, RepositoryState, ResetType, Direction, Sort } = nativeBinding
+const { Commit, Time, Signature, Config, Credentials, Index, Oid, Object, ReferenceType, Reference, Remote, RemoteHead, Repository, InitOptions, Revwalk, Tree, TreeEntry, RepositoryState, ResetType, Direction, Sort } = nativeBinding
 
 module.exports.Commit = Commit
 module.exports.Time = Time
 module.exports.Signature = Signature
+module.exports.Config = Config
 module.exports.Credentials = Credentials
 module.exports.Index = Index
 module.exports.Oid = Oid

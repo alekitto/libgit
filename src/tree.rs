@@ -1,4 +1,4 @@
-use crate::object::Object;
+use crate::object::{Object, Oid};
 use crate::repository::Repository;
 use napi::bindgen_prelude::*;
 use std::path::Path;
@@ -27,6 +27,12 @@ impl From<Tree> for git2::Tree<'_> {
 
 #[napi]
 impl Tree {
+  #[napi]
+  pub fn oid(&self) -> Oid {
+    Oid(self.inner.id())
+  }
+
+  #[napi]
   pub fn entry_by_path(&self, path: String) -> napi::Result<TreeEntry> {
     Ok(
       self
@@ -45,6 +51,11 @@ pub struct TreeEntry {
 
 #[napi]
 impl TreeEntry {
+  #[napi]
+  pub fn oid(&self) -> Oid {
+    Oid(self.inner.id())
+  }
+
   #[napi]
   pub fn is_tree(&self) -> bool {
     matches!(self.inner.kind(), Some(git2::ObjectType::Tree))

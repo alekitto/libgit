@@ -61,6 +61,11 @@ export class Signature {
   email(): string | null
   time(): Time
 }
+export class Config {
+  setStr(name: string, value: string): void
+  setBool(name: string, value: boolean): void
+  setI64(name: string, value: number): void
+}
 export class Credentials {
   static default(): Credentials
   static usernameAndPassword(username: string, password: string): Credentials
@@ -71,13 +76,17 @@ export class Index {
   writeTree(): Promise<Oid>
 }
 export class Oid {
+  static fromString(val: string): Oid
   toString(): string
   cmp(other: Oid): number
 }
 export class Object {
   toString(): string
+  asTree(): Tree | null
+  asCommit(): Commit | null
 }
 export class Reference {
+  toString(): string
   kind(): ReferenceType
   target(): Oid | null
   name(): string | null
@@ -114,6 +123,7 @@ export class Repository {
   fetch(options?: FetchOptions | undefined | null): Promise<void>
   getCurrentBranch(): Promise<Reference>
   head(): Promise<Reference>
+  config(): Promise<Config>
   reset(target: Commit | Reference | Oid, resetType?: ResetType | undefined | null): Promise<void>
   getReference(reference: string): Promise<Reference>
   getReferenceNames(referenceType?: ReferenceType | undefined | null): Promise<Array<string>>
@@ -126,12 +136,17 @@ export class InitOptions {
 }
 export class Revwalk {
   push(oid: Oid): object
+  pushRange(range: string): object
   next(): Promise<Oid | null>
   reset(): Promise<void>
   sort(sorts: Array<Sort>): Promise<void>
 }
-export class Tree { }
+export class Tree {
+  oid(): Oid
+  entryByPath(path: string): TreeEntry
+}
 export class TreeEntry {
+  oid(): Oid
   isTree(): boolean
   toObject(repository: Repository): object
 }
