@@ -1,10 +1,16 @@
-use crate::commit::Commit;
+use crate::commit::{Commit, Signature};
 use crate::fetch_options::FetchOptions;
 use crate::object::Oid;
 use crate::reference::ReferenceType;
 use crate::remote::Remote;
-use crate::task::{CloneRepository, FetchRepository, InitRepository, OpenRepository};
+use crate::revwalk::Revwalk;
+use crate::task::{
+  BranchNameRef, CloneRepository, CreateCommit, FetchRepository, GetBranchCommit, InitRepository,
+  OpenRepository,
+};
+use crate::tree::Tree;
 use crate::{RepositoryState, ResetType};
+use anyhow::anyhow;
 use napi::bindgen_prelude::*;
 use napi::tokio::sync::Mutex;
 use napi::{Env, JsObject};
@@ -27,20 +33,48 @@ impl Repository {
     let is_bare = repository.is_bare();
     let path = repository.path().to_string_lossy().to_string();
 
-    let this = Self {
+    Self {
       repository: Mutex::new(repository),
       is_bare,
       path,
-    };
-
-    this
+    }
   }
 
   pub(crate) async fn internal_find_commit(&self, target: Oid) -> anyhow::Result<Commit> {
     let repository = self.repository.lock().await;
     let commit = repository.find_commit(target.0)?;
 
-    Ok(Commit::from_raw(commit))
+    Ok(Commit::from(commit))
+  }
+
+  pub(crate) async fn internal_create_commit(
+    &self,
+    update_ref: Option<String>,
+    author: Signature,
+    committer: Signature,
+    message: String,
+    tree: Tree,
+    parents: Vec<Commit>,
+  ) -> anyhow::Result<Oid> {
+    let parents = parents
+      .into_iter()
+      .map(git2::Commit::from)
+      .collect::<Vec<_>>();
+    let parents_ptr = parents.iter().collect::<Vec<&git2::Commit>>();
+
+    let repository = self.repository.lock().await;
+    Ok(
+      repository
+        .commit(
+          update_ref.as_deref(),
+          &author.try_into()?,
+          &committer.try_into()?,
+          &message,
+          &tree.into(),
+          parents_ptr.as_slice(),
+        )?
+        .into(),
+    )
   }
 
   async fn internal_create_branch(
@@ -157,7 +191,7 @@ impl Repository {
     this: Reference<Repository>,
     env: Env,
   ) -> Result<JsObject> {
-    let oid = target.clone();
+    let oid = *target;
     let (deferred, promise) = env.create_deferred()?;
     napi::tokio::spawn(async move {
       match this.internal_find_commit(oid).await {
@@ -209,7 +243,7 @@ impl Repository {
   ) -> Result<JsObject> {
     let oid = match commit {
       Either3::A(commit) => commit.oid(),
-      Either3::B(oid) => oid.clone(),
+      Either3::B(oid) => *oid,
       Either3::C(commit_sha) => Oid(git2::Oid::from_str(&commit_sha).map_err(anyhow::Error::from)?),
     };
 
@@ -226,6 +260,42 @@ impl Repository {
     });
 
     Ok(promise)
+  }
+
+  #[napi(ts_return_type = "Promise<Commit>")]
+  pub fn get_branch_commit(
+    &self,
+    name: Either<String, ClassInstance<crate::reference::Reference>>,
+    this: Reference<Repository>,
+  ) -> Result<AsyncTask<GetBranchCommit>> {
+    let reference = match name {
+      Either::A(name) => BranchNameRef::Name(name),
+      Either::B(reference) => {
+        let Some(oid) = reference.target() else {
+          return Err(anyhow!("not a commit reference").into());
+        };
+        BranchNameRef::Reference(oid)
+      }
+    };
+
+    Ok(AsyncTask::new(GetBranchCommit::new(this, reference)))
+  }
+
+  #[napi(ts_return_type = "Promise<Oid>")]
+  #[allow(clippy::too_many_arguments)]
+  pub fn create_commit(
+    &self,
+    update_ref: Option<String>,
+    author: ClassInstance<Signature>,
+    committer: ClassInstance<Signature>,
+    message: String,
+    tree: ClassInstance<Tree>,
+    parents: Vec<ClassInstance<Commit>>,
+    this: Reference<Repository>,
+  ) -> AsyncTask<CreateCommit> {
+    AsyncTask::new(CreateCommit::new(
+      this, update_ref, author, committer, message, tree, parents,
+    ))
   }
 
   #[napi(ts_return_type = "Promise<void>")]
@@ -281,14 +351,14 @@ impl Repository {
     let (deferred, promise) = env.create_deferred()?;
     napi::tokio::spawn(async move {
       let object = match target {
-        Either::A(commit) => commit.as_object(&this).await,
+        Either::A(commit) => Ok(commit.as_object()),
         Either::B(oid) => this.object_from_oid(oid.0).await,
       };
 
       let object = match object {
         Ok(object) => object,
         Err(e) => {
-          deferred.reject(e.into());
+          deferred.reject(e);
           return;
         }
       };
@@ -355,5 +425,13 @@ impl Repository {
       .collect();
 
     Ok(refs)
+  }
+
+  #[napi]
+  pub async fn create_rev_walk(&self) -> napi::Result<Revwalk> {
+    let repository = self.repository.lock().await;
+    let rev_walk = repository.revwalk().map_err(anyhow::Error::from)?;
+
+    Ok(rev_walk.into())
   }
 }

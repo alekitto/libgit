@@ -36,17 +36,42 @@ export const enum Direction {
   Fetch = 0,
   Push = 1
 }
+export const enum Sort {
+  None = 0,
+  Topological = 1,
+  Time = 2,
+  Reverse = 3
+}
 export class Commit {
-  asObject(repository: Repository): Promise<object>
+  asObject(): object
   oid(): Oid
+  messageRaw(): string | null
+  author(): Signature
+  committer(): Signature
+  getParents(): Array<Commit>
+  getTree(): Tree
+}
+export class Time {
+  time: number
+  offset: number
+}
+export class Signature {
+  name(): string | null
+  email(): string | null
+  time(): Time
 }
 export class Credentials {
   static default(): Credentials
   static usernameAndPassword(username: string, password: string): Credentials
   static sshKeyFromMemory(username: string, publicKey: string | undefined | null, privateKey: string, passphrase?: string | undefined | null): Credentials
 }
-export class Oid { }
-export class Object { }
+export class Oid {
+  toString(): string
+  cmp(other: Oid): number
+}
+export class Object {
+  toString(): string
+}
 export class Reference {
   kind(): ReferenceType
   target(): Oid | null
@@ -56,7 +81,7 @@ export class Remote {
   connect(direction: Direction, credentialsCallback?: (url: string, username?: string) => Credentials): Promise<void>
   disconnect(): Promise<void>
   referenceList(): Promise<Array<RemoteHead>>
-  push(refSpecs: Array<string>, credentialsCallback?: (url: string, username?: string) => Credentials): Promise<unknown>
+  push(refSpecs: Array<string>, credentialsCallback?: (url: string, username?: string) => Credentials): Promise<void>
 }
 export class RemoteHead {
   name(): string
@@ -76,10 +101,24 @@ export class Repository {
   findCommit(target: Oid): Promise<Commit>
   createRemote(name: string, url: string): Promise<Remote>
   createBranch(name: string, commit: Commit | Oid | string, force: boolean): object
+  getBranchCommit(name: string | Reference): Promise<Commit>
+  createCommit(updateRef: string | undefined | null, author: Signature, committer: Signature, message: string, tree: Tree, parents: Array<Commit>): Promise<Oid>
   fetch(options?: FetchOptions | undefined | null): Promise<void>
   getCurrentBranch(): Promise<Reference>
   head(): Promise<Reference>
   reset(target: Commit | Reference | Oid, resetType?: ResetType | undefined | null): Promise<void>
   getReference(reference: string): Promise<Reference>
   getReferenceNames(referenceType?: ReferenceType | undefined | null): Promise<Array<string>>
+  createRevWalk(): Promise<Revwalk>
+}
+export class Revwalk {
+  push(oid: Oid): object
+  next(): Promise<Oid | null>
+  reset(): Promise<void>
+  sort(sorts: Array<Sort>): Promise<void>
+}
+export class Tree { }
+export class TreeEntry {
+  isTree(): boolean
+  toObject(repository: Repository): object
 }

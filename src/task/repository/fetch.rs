@@ -38,7 +38,7 @@ fn fetch(repository: &Repository, fetch_options: &FetchOpts, env: &Env) -> Resul
     .clone()
     .unwrap_or_else(|| "origin".to_string());
 
-  let mut fo = fetch_options.to_git_fetch_opts(&env)?;
+  let mut fo = fetch_options.to_git_fetch_opts(env)?;
   repository.internal_fetch(remote_name, &mut fo, fetch_options.prune.unwrap_or(false))?;
 
   Ok(())

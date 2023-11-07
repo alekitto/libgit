@@ -112,7 +112,8 @@ impl Remote {
   pub fn connect(
     &self,
     direction: Direction,
-    #[napi(ts_arg_type = "(url: string, username?: string) => Credentials")] credentials_callback: Option<JsFunction>,
+    #[napi(ts_arg_type = "(url: string, username?: string) => Credentials")]
+    credentials_callback: Option<JsFunction>,
     env: Env,
     this: Reference<Remote>,
   ) -> napi::Result<AsyncTask<ConnectRemote>> {
@@ -157,7 +158,8 @@ impl Remote {
   pub fn push(
     &self,
     ref_specs: Vec<String>,
-    #[napi(ts_arg_type = "(url: string, username?: string) => Credentials")] credentials_callback: Option<JsFunction>,
+    #[napi(ts_arg_type = "(url: string, username?: string) => Credentials")]
+    credentials_callback: Option<JsFunction>,
     env: Env,
     this: Reference<Remote>,
   ) -> napi::Result<AsyncTask<PushRemote>> {

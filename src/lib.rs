@@ -5,7 +5,9 @@ mod object;
 mod reference;
 mod remote;
 mod repository;
+mod revwalk;
 mod task;
+mod tree;
 
 use napi::bindgen_prelude::*;
 
@@ -67,6 +69,26 @@ impl From<ResetType> for git2::ResetType {
       ResetType::Soft => git2::ResetType::Soft,
       ResetType::Hard => git2::ResetType::Hard,
       ResetType::Mixed => git2::ResetType::Mixed,
+    }
+  }
+}
+
+#[napi]
+#[derive(Debug, Eq, PartialEq)]
+pub enum Sort {
+  None,
+  Topological,
+  Time,
+  Reverse,
+}
+
+impl From<Sort> for git2::Sort {
+  fn from(value: Sort) -> Self {
+    match value {
+      Sort::None => git2::Sort::NONE,
+      Sort::Topological => git2::Sort::TOPOLOGICAL,
+      Sort::Time => git2::Sort::TIME,
+      Sort::Reverse => git2::Sort::REVERSE,
     }
   }
 }
