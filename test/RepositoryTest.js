@@ -1,5 +1,6 @@
 import { InitOptions, Repository, RepositoryState } from '../index';
 import { randomBytes } from 'node:crypto';
+import { sep } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const Filesystem = Jymfony.Component.Filesystem.Filesystem;
@@ -12,7 +13,7 @@ export default class RepositoryTest extends TestCase {
     _tmpDirName;
 
     async beforeEach() {
-        this._tmpDirName = tmpdir() + '/' + randomBytes(5).toString('base64').replace(/[^0-9a-z]/i, '-');
+        this._tmpDirName = tmpdir() + sep + randomBytes(5).toString('base64').replace(/[^0-9a-z]/i, '-');
         await fs.mkdir(this._tmpDirName);
     }
 
@@ -68,7 +69,7 @@ export default class RepositoryTest extends TestCase {
 
         const sig = await repo.signature();
 
-        const file = new File(this._tmpDirName + '/README.md');
+        const file = new File(this._tmpDirName + sep + 'README.md');
         const openFile = await file.openFile('w+');
         await openFile.fwrite(Buffer.from('Example\n'));
         await openFile.close();
@@ -89,7 +90,7 @@ export default class RepositoryTest extends TestCase {
 
         __self.assertNotNull(commit_id);
 
-        const tmpDirName = tmpdir() + '/' + randomBytes(5).toString('base64').replace(/[^0-9a-z]/i, '-');
+        const tmpDirName = tmpdir() + sep + randomBytes(5).toString('base64').replace(/[^0-9a-z]/i, '-');
         try {
             await Repository.clone('file://' + this._tmpDirName, tmpDirName);
             const r2 = await Repository.open(tmpDirName);
