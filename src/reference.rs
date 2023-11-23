@@ -1,5 +1,4 @@
 use crate::object::Oid;
-use napi::bindgen_prelude::*;
 
 #[napi]
 #[derive(PartialEq)]

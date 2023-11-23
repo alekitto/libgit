@@ -86,6 +86,30 @@ impl Repository {
     )
   }
 
+  async fn internal_fast_rebase(&self, onto_ref: String) -> anyhow::Result<()> {
+    let committer = self.signature().await?;
+
+    let repository = self.repository.lock().await;
+    let reference = repository.find_reference(&onto_ref)?;
+    let annotated_commit = repository.reference_to_annotated_commit(&reference)?;
+
+    let current_branch_ref = repository.head()?;
+    let current_branch = repository.reference_to_annotated_commit(&current_branch_ref)?;
+
+    let mut rebase =
+      repository.rebase(Some(&current_branch), None, Some(&annotated_commit), None)?;
+    loop {
+      let Some(op) = rebase.next() else {
+        break;
+      };
+      let _ = op?;
+
+      rebase.commit(None, &committer.clone().try_into()?, None)?;
+    }
+
+    Ok(())
+  }
+
   async fn internal_create_branch(
     &self,
     name: String,
@@ -132,6 +156,14 @@ impl Repository {
     if prune {
       remote.prune(None)?;
     }
+
+    Ok(())
+  }
+
+  pub(crate) async fn internal_checkout(&self, ref_name: &str) -> anyhow::Result<()> {
+    let repository = self.repository.lock().await;
+    repository.set_head(ref_name)?;
+    repository.checkout_head(None)?;
 
     Ok(())
   }
@@ -216,6 +248,22 @@ impl Repository {
   #[napi]
   pub fn path(&self) -> String {
     self.path.clone()
+  }
+
+  #[napi(ts_return_type = "Promise<void>")]
+  pub async fn checkout(&self, ref_name: String) -> napi::Result<()> {
+    self
+      .internal_checkout(&ref_name)
+      .await
+      .map_err(|e| e.into())
+  }
+
+  #[napi(ts_return_type = "Promise<()>")]
+  pub async fn fast_rebase(&self, onto_ref: String) -> napi::Result<()> {
+    self
+      .internal_fast_rebase(onto_ref)
+      .await
+      .map_err(|e| e.into())
   }
 
   #[napi(ts_return_type = "Promise<RepositoryState>")]
