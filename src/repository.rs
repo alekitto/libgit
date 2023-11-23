@@ -346,6 +346,32 @@ impl Repository {
     Ok(promise)
   }
 
+  #[napi(ts_return_type = "Promise<Remote>")]
+  pub fn find_remote(
+    &self,
+    name: String,
+    this: Reference<Repository>,
+    env: Env,
+  ) -> Result<JsObject> {
+    let (deferred, promise) = env.create_deferred()?;
+    napi::tokio::spawn(async move {
+      let repository = this.repository.lock().await;
+      let remote = repository.find_remote(&name).map_err(anyhow::Error::from);
+
+      let remote = match remote {
+        Ok(r) => Remote::new(r),
+        Err(e) => {
+          deferred.reject(e.into());
+          return;
+        }
+      };
+
+      deferred.resolve(|_| Ok(remote));
+    });
+
+    Ok(promise)
+  }
+
   #[napi]
   pub fn create_branch(
     &self,

@@ -180,16 +180,5 @@ export default class RepositoryTest extends TestCase {
         await repo.fastRebase('refs/heads/branch_1');
         const lastCommit = await repo.getBranchCommit('refs/heads/branch_2');
         __self.assertEquals('second commit', lastCommit.getParents()[0].messageRaw());
-
-        // const tmpDirName = tmpdir() + sep + randomBytes(5).toString('base64').replace(/[^0-9a-z]/i, '-');
-        // try {
-        //     await Repository.clone('file://' + this._tmpDirName, tmpDirName);
-        //     const r2 = await Repository.open(tmpDirName);
-        //     const commit = await r2.getBranchCommit('refs/heads/master');
-        //
-        //     __self.assertEquals('first commit', commit.messageRaw());
-        // } finally {
-        //     await fs.remove(tmpDirName);
-        // }
     }
 }

@@ -1,9 +1,9 @@
 use crate::credentials::Credentials;
 use crate::object::Oid;
-use crate::task::{ConnectRemote, PushRemote};
+use crate::task::{ConnectRemote, PullRemote, PushRemote};
 use crate::Direction;
 use anyhow::Result;
-use git2::{PushOptions, RemoteCallbacks, RemoteConnection};
+use git2::{AutotagOption, FetchOptions, PushOptions, RemoteCallbacks, RemoteConnection};
 use napi::bindgen_prelude::*;
 use napi::tokio::sync::Mutex;
 use napi::JsUnknown;
@@ -36,6 +36,26 @@ impl Remote {
 
     let mut conn = futures::executor::block_on(self.connection.lock());
     let _ = conn.insert(RemoteConn(unsafe { std::mem::transmute(connection) }));
+
+    Ok(())
+  }
+
+  pub(crate) fn internal_pull(
+    &self,
+    ref_specs: &[String],
+    mut remote_callbacks: RemoteCallbacks,
+  ) -> Result<()> {
+    let mut fo = FetchOptions::default();
+    fo.remote_callbacks(remote_callbacks);
+
+    let mut remote = futures::executor::block_on(self.inner.lock());
+    remote.download(ref_specs, Some(&mut fo))?;
+    remote.update_tips(
+      Some(&mut remote_callbacks),
+      true,
+      AutotagOption::Unspecified,
+      None,
+    )?;
 
     Ok(())
   }
@@ -170,6 +190,23 @@ impl Remote {
     };
 
     Ok(AsyncTask::new(PushRemote::new(this, ref_specs, cb_ref)))
+  }
+
+  #[napi(ts_return_type = "Promise<void>")]
+  pub fn download(
+    &self,
+    #[napi(ts_arg_type = "(url: string, username?: string) => Credentials")]
+    credentials_callback: Option<JsFunction>,
+    env: Env,
+    this: Reference<Remote>,
+  ) -> napi::Result<AsyncTask<PullRemote>> {
+    let cb_ref = if let Some(f) = credentials_callback {
+      Some(env.create_reference(f)?)
+    } else {
+      None
+    };
+
+    Ok(AsyncTask::new(PullRemote::new(this, cb_ref)))
   }
 }
 
