@@ -111,6 +111,8 @@ export class Repository {
   isBare(): boolean
   isEmpty(): Promise<boolean>
   path(): string
+  checkout(refName: string): Promise<void>
+  fastRebase(ontoRef: string): Promise<void>
   state(): Promise<RepositoryState>
   findCommit(target: Oid): Promise<Commit>
   findTree(target: Oid): Promise<Tree>

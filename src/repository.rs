@@ -13,6 +13,7 @@ use crate::task::{
 use crate::tree::Tree;
 use crate::{RepositoryState, ResetType};
 use anyhow::anyhow;
+use git2::build::CheckoutBuilder;
 use napi::bindgen_prelude::*;
 use napi::tokio::sync::Mutex;
 use napi::{Env, JsObject};
@@ -107,6 +108,8 @@ impl Repository {
       rebase.commit(None, &committer.clone().try_into()?, None)?;
     }
 
+    rebase.finish(None)?;
+
     Ok(())
   }
 
@@ -162,8 +165,10 @@ impl Repository {
 
   pub(crate) async fn internal_checkout(&self, ref_name: &str) -> anyhow::Result<()> {
     let repository = self.repository.lock().await;
+    let treeish = repository.revparse_single(ref_name)?;
+
+    repository.checkout_tree(&treeish, Some(&mut CheckoutBuilder::new().force()))?;
     repository.set_head(ref_name)?;
-    repository.checkout_head(None)?;
 
     Ok(())
   }
@@ -258,7 +263,7 @@ impl Repository {
       .map_err(|e| e.into())
   }
 
-  #[napi(ts_return_type = "Promise<()>")]
+  #[napi(ts_return_type = "Promise<void>")]
   pub async fn fast_rebase(&self, onto_ref: String) -> napi::Result<()> {
     self
       .internal_fast_rebase(onto_ref)
