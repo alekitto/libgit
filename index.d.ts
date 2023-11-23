@@ -96,6 +96,7 @@ export class Remote {
   disconnect(): Promise<void>
   referenceList(): Promise<Array<RemoteHead>>
   push(refSpecs: Array<string>, credentialsCallback?: (url: string, username?: string) => Credentials): Promise<void>
+  download(refSpecs: Array<string>, credentialsCallback?: (url: string, username?: string) => Credentials): Promise<void>
 }
 export class RemoteHead {
   name(): string
@@ -117,6 +118,7 @@ export class Repository {
   findCommit(target: Oid): Promise<Commit>
   findTree(target: Oid): Promise<Tree>
   createRemote(name: string, url: string): Promise<Remote>
+  findRemote(name: string): Promise<Remote>
   createBranch(name: string, commit: Commit | Oid | string, force: boolean): object
   getBranchCommit(name: string | Reference): Promise<Commit>
   index(): Promise<Index>

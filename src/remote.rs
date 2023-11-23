@@ -43,7 +43,8 @@ impl Remote {
   pub(crate) fn internal_pull(
     &self,
     ref_specs: &[String],
-    mut remote_callbacks: RemoteCallbacks,
+    remote_callbacks: RemoteCallbacks,
+    mut update_tips_remote_callbacks: RemoteCallbacks,
   ) -> Result<()> {
     let mut fo = FetchOptions::default();
     fo.remote_callbacks(remote_callbacks);
@@ -51,7 +52,7 @@ impl Remote {
     let mut remote = futures::executor::block_on(self.inner.lock());
     remote.download(ref_specs, Some(&mut fo))?;
     remote.update_tips(
-      Some(&mut remote_callbacks),
+      Some(&mut update_tips_remote_callbacks),
       true,
       AutotagOption::Unspecified,
       None,
@@ -195,6 +196,7 @@ impl Remote {
   #[napi(ts_return_type = "Promise<void>")]
   pub fn download(
     &self,
+    ref_specs: Vec<String>,
     #[napi(ts_arg_type = "(url: string, username?: string) => Credentials")]
     credentials_callback: Option<JsFunction>,
     env: Env,
@@ -206,7 +208,7 @@ impl Remote {
       None
     };
 
-    Ok(AsyncTask::new(PullRemote::new(this, cb_ref)))
+    Ok(AsyncTask::new(PullRemote::new(this, ref_specs, cb_ref)))
   }
 }
 

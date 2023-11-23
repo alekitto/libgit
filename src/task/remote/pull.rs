@@ -39,8 +39,17 @@ impl Task for PullRemote {
         .and_then(|c| env.get_reference_value(c).ok()),
       &env,
     )?;
+    let ut_cb = Remote::prepare_remote_callbacks(
+      self
+        .credentials_callback
+        .as_ref()
+        .and_then(|c| env.get_reference_value(c).ok()),
+      &env,
+    )?;
 
-    self.remote.internal_pull(self.ref_specs.as_slice(), cb)?;
+    self
+      .remote
+      .internal_pull(self.ref_specs.as_slice(), cb, ut_cb)?;
 
     Ok(())
   }
